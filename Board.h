@@ -4,6 +4,10 @@
 
 #include <SFML/Graphics.hpp>
 #include <vector>
+#include <memory>
+
+using namespace std;
+
 
 class Board {
 public:
@@ -29,7 +33,7 @@ private:
     int cell;
     int offX, offY;
 
-    std::vector<std::vector<char>> grid;
+    vector<vector<char>> grid;
 
     const sf::Font& font;    
     sf::Text        cellText;

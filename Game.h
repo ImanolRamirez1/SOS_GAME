@@ -5,37 +5,50 @@
 #include <SFML/Graphics.hpp>
 #include <string>
 #include "Board.h"
+#include <memory>      
+using namespace std;
+
+
+
+
+
+
+class GameMode;
 
 class Game {
 public:
     Game();
+    ~Game();
     void run();
 
 private:
-    //reminder:::    sf;;Font font MUST COME BEFORE any sf;;text
+    // window & board
     sf::RenderWindow window;
-    sf::Font        font;
-    Board           board;
+    sf::Font         font;
+    Board            board;
 
-    // Labels & text
+    // current strategy 
+    unique_ptr<GameMode> mode;
+
+    // labels/text 
     sf::Text title, simpleLabel, generalLabel;
     sf::Text blueLabel, redLabel, turnLabel;
     sf::Text blueScoreLabel, redScoreLabel, statusLabel;
     sf::Text boardSizeLabel, inputText, resetLabel;
 
-    // S/O glyphs shown for each player
+    // glyphs
     sf::Text blueS, blueO, redS, redO;
 
-    // Buttons / selectors
+    // widgets
     sf::RectangleShape inputBox, resetBtn;
     sf::CircleShape    simpleSelect, generalSelect, blueSelect, redSelect;
 
-    // State
+    // state
     bool isSimpleMode, blueTurn, blueChoosesS, redChoosesS, gameOver, isTyping;
     int  blueScore, redScore, activeSize;
-    std::string winnerMsg, boardSizeStr;
+    string winnerMsg, boardSizeStr;
 
-    // Helpers
+    // helpers
     void handleEvents();
     void draw();
     void resetBoard();
@@ -44,3 +57,4 @@ private:
 };
 
 #endif
+

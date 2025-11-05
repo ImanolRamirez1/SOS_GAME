@@ -3,6 +3,9 @@
 #include "Board.h"
 #include <algorithm>
 
+
+
+
 Board::Board(int size, int cellSize, int offsetX, int offsetY, const sf::Font& f)
     : n(size)
     , cell(cellSize)
@@ -10,7 +13,7 @@ Board::Board(int size, int cellSize, int offsetX, int offsetY, const sf::Font& f
     , offY(offsetY)
     , grid(size, std::vector<char>(size, ' '))
     , font(f)
-    , cellText(f, "", 22u) 
+    , cellText(f, "", 22u)
 {
     cellText.setFillColor(sf::Color::Black);
     line.setFillColor(sf::Color::Black);
