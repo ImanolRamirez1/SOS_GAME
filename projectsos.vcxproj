@@ -132,12 +132,19 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Board.cpp" />
+    <ClCompile Include="ComputerPlayer.cpp" />
     <ClCompile Include="Game.cpp" />
     <ClCompile Include="Game.h" />
+    <ClCompile Include="GeneralMode.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="SimpleMode.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Board.h" />
+    <ClInclude Include="ComputerPlayer.h" />
+    <ClInclude Include="GameMode.h" />
+    <ClInclude Include="GeneralMode.h" />
+    <ClInclude Include="SimpleMode.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

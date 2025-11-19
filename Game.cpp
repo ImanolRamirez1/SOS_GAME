@@ -9,18 +9,20 @@
 
 
 
+
+
+
 #include "Game.h"
-#include "GameMode.h"      
-#include "GameMode.h"      
+#include "GameMode.h"
 #include "SimpleMode.h"
 #include "GeneralMode.h"
-
+#include "ComputerPlayer.h"
+#include <Random>
 #include <iostream>
 #include <algorithm>
 #include <optional>
 
-using namespace std;
-
+Game::~Game() = default;
 
 static constexpr int WINDOW_WIDTH = 800;
 static constexpr int WINDOW_HEIGHT = 600;
@@ -29,7 +31,7 @@ static constexpr int CELL_SIZE = 40;
 static constexpr int BOARD_OFFSET_X = 200;
 static constexpr int BOARD_OFFSET_Y = 100;
 
-Game::~Game() = default;
+
 
 Game::Game()
     : window(sf::VideoMode({ WINDOW_WIDTH, WINDOW_HEIGHT }), "SOS Game")
@@ -41,6 +43,7 @@ Game::Game()
     , gameOver(false), isTyping(false)
     , blueScore(0), redScore(0)
     , activeSize(BOARD_SIZE)
+    
     , title(font, "SOS Game", 22u)
     , simpleLabel(font, "Simple game", 16u)
     , generalLabel(font, "General game", 16u)
@@ -57,6 +60,10 @@ Game::Game()
     , blueO(font, "O", 20u)
     , redS(font, "S", 20u)
     , redO(font, "O", 20u)
+    , blueHumanLabel(font, "Human", 14u)
+    , blueCpuLabel(font, "CPU", 14u)
+    , redHumanLabel(font, "Human", 14u)
+    , redCpuLabel(font, "CPU", 14u)
 {
     window.setFramerateLimit(60);
     window.setKeyRepeatEnabled(true);
@@ -66,13 +73,13 @@ Game::Game()
         std::exit(1);
     }
 
-    // Default strategy
     mode = std::make_unique<SimpleMode>();
 
-    // Titles 
+    // Title
     title.setFillColor(sf::Color::Black);
     title.setPosition({ 250.f, 10.f });
 
+    // Mode labels
     simpleLabel.setFillColor(sf::Color::Black);
     simpleLabel.setPosition({ 220.f, 40.f });
 
@@ -97,18 +104,20 @@ Game::Game()
     redLabel.setFillColor(sf::Color::Black);
     redLabel.setPosition({ 520.f, 90.f });
 
-    // S/O glyphs
+    // S/O letters
     blueS.setFillColor(sf::Color::Black);
     blueS.setPosition({ 50.f, 120.f });
+
     blueO.setFillColor(sf::Color::Black);
     blueO.setPosition({ 50.f, 150.f });
 
     redS.setFillColor(sf::Color::Black);
     redS.setPosition({ 540.f, 120.f });
+
     redO.setFillColor(sf::Color::Black);
     redO.setPosition({ 540.f, 150.f });
 
-    // S/O selection dots
+    // S/O selectors
     blueSelect.setRadius(5.f);
     blueSelect.setFillColor(sf::Color::Blue);
     blueSelect.setPosition({ 35.f, 125.f });
@@ -117,19 +126,22 @@ Game::Game()
     redSelect.setFillColor(sf::Color::Red);
     redSelect.setPosition({ 525.f, 125.f });
 
-    // Turn & score labels
-    turnLabel.setPosition({ 200.f, 460.f });
-
+    // Scores
     blueScoreLabel.setFillColor(sf::Color::Blue);
     blueScoreLabel.setPosition({ 30.f, 180.f });
 
     redScoreLabel.setFillColor(sf::Color::Red);
     redScoreLabel.setPosition({ 520.f, 180.f });
 
+    // Status
     statusLabel.setFillColor(sf::Color::Black);
     statusLabel.setPosition({ 200.f, 430.f });
 
-    // Board size input
+    // Current turn 
+    turnLabel.setFillColor(sf::Color::Black);
+    turnLabel.setPosition({ 200.f, 460.f });
+
+    // Board size label + input
     boardSizeLabel.setFillColor(sf::Color::Black);
     boardSizeLabel.setPosition({ 540.f, 40.f });
 
@@ -144,7 +156,7 @@ Game::Game()
     boardSizeStr = std::to_string(activeSize);
     inputText.setString(boardSizeStr);
 
-    // Reset button
+   
     resetBtn.setSize({ 120.f, 36.f });
     resetBtn.setPosition({ 320.f, 520.f });
     resetBtn.setFillColor(sf::Color(200, 200, 200));
@@ -152,25 +164,70 @@ Game::Game()
     resetBtn.setOutlineThickness(1.f);
 
     resetLabel.setFillColor(sf::Color::Black);
-    resetLabel.setPosition({ resetBtn.getPosition().x + 10.f, resetBtn.getPosition().y + 8.f });
+    resetLabel.setPosition({ resetBtn.getPosition().x + 10.f,
+                             resetBtn.getPosition().y + 8.f });
+
+    blueHumanBtn.setRadius(7.f);
+    blueHumanBtn.setFillColor(sf::Color::Blue);
+    blueHumanBtn.setPosition({ 30.f, 210.f });
+
+    blueCpuBtn.setRadius(7.f);
+    blueCpuBtn.setFillColor(sf::Color::Transparent);
+    blueCpuBtn.setOutlineColor(sf::Color::Blue);
+    blueCpuBtn.setOutlineThickness(2.f);
+    blueCpuBtn.setPosition({ 70.f, 210.f });
+
+    redHumanBtn.setRadius(7.f);
+    redHumanBtn.setFillColor(sf::Color::Red);
+    redHumanBtn.setPosition({ 520.f, 210.f });
+
+    redCpuBtn.setRadius(7.f);
+    redCpuBtn.setFillColor(sf::Color::Transparent);
+    redCpuBtn.setOutlineColor(sf::Color::Red);
+    redCpuBtn.setOutlineThickness(2.f);
+    redCpuBtn.setPosition({ 560.f, 210.f });
+
+  
+    blueHumanLabel.setFillColor(sf::Color::Black);
+    blueHumanLabel.setPosition({ 30.f, 230.f });
+
+    blueCpuLabel.setFillColor(sf::Color::Black);
+    blueCpuLabel.setPosition({ 85.f, 230.f });
+
+    redHumanLabel.setFillColor(sf::Color::Black);
+    redHumanLabel.setPosition({ 520.f, 230.f });
+
+    redCpuLabel.setFillColor(sf::Color::Black);
+    redCpuLabel.setPosition({ 570.f, 230.f });
 }
+
+char Game::randomLetter() {
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
+    static std::uniform_int_distribution<int> dist(0, 1);
+    return dist(gen) == 0 ? 'S' : 'O';
+}
+
+
 
 void Game::run() {
     while (window.isOpen()) {
         handleEvents();
+        updateComputerMove();
         draw();
     }
 }
 
 bool Game::containsPoint(const sf::RectangleShape& r, float x, float y) {
-    sf::FloatRect bounds{ r.getPosition(), r.getSize() };
-    return bounds.contains({ x, y });
+    sf::FloatRect bounds(r.getPosition(), r.getSize());
+    return bounds.contains(sf::Vector2f{ x, y });   
 }
 
 void Game::resetBoard() {
     board.reset();
     blueTurn = true;
-    blueScore = redScore = 0;
+    blueScore = 0;
+    redScore = 0;
     gameOver = false;
     winnerMsg.clear();
     blueScoreLabel.setString("Score: 0");
@@ -181,28 +238,117 @@ void Game::resetBoard() {
 void Game::updateBoardSize(int newSize) {
     board.setSize(newSize);
     activeSize = newSize;
+
     resetBoard();
+
     boardSizeStr = std::to_string(activeSize);
     inputText.setString(boardSizeStr);
 }
 
+
+void Game::updateComputerMove() {
+    if (gameOver) return;
+
+    bool cpuTurn =
+        (blueTurn && blueIsComputer) ||
+        (!blueTurn && redIsComputer);
+
+    if (!cpuTurn) return;
+
+    if (!waitingForCpuMove) {
+        waitingForCpuMove = true;
+        cpuClock.restart();
+        return;
+    }
+
+    if (cpuClock.getElapsedTime().asMilliseconds() < 250)
+        return;
+
+    waitingForCpuMove = false;
+
+    char letter = randomLetter();
+
+
+    auto move = cpu.chooseMove(board, letter);
+    int row = move.first;
+    int col = move.second;
+
+    if (!board.inBounds(row, col) || board.get(row, col) != ' ')
+        return;
+
+    board.set(row, col, letter);
+    auto res = mode->onMove(board, row, col, blueTurn);
+
+    if (res.points > 0) {
+        if (blueTurn) blueScore += res.points;
+        else          redScore += res.points;
+        blueScoreLabel.setString("Score: " + std::to_string(blueScore));
+        redScoreLabel.setString("Score: " + std::to_string(redScore));
+    }
+
+    if (res.gameOver) {
+        gameOver = true;
+        if (!res.message.empty()) statusLabel.setString(res.message);
+        else {
+            if (blueScore > redScore)      statusLabel.setString("Blue wins (General)!");
+            else if (redScore > blueScore) statusLabel.setString("Red wins (General)!");
+            else                           statusLabel.setString("It's a tie!");
+        }
+        return;
+    }
+
+    if (res.points == 0) blueTurn = !blueTurn;
+}
+
+void Game::handlePlayerTypeClick(int mx, int my) {
+    auto inside = [&](sf::CircleShape& c) {
+        sf::FloatRect r(c.getPosition(), sf::Vector2f{ 14.f, 14.f });
+        return r.contains(sf::Vector2f{ (float)mx, (float)my });
+        };
+
+    if (inside(blueHumanBtn)) {
+        blueIsComputer = false;
+        blueHumanBtn.setFillColor(sf::Color::Blue);
+        blueCpuBtn.setFillColor(sf::Color::Transparent);
+    }
+    if (inside(blueCpuBtn)) {
+        blueIsComputer = true;
+        blueCpuBtn.setFillColor(sf::Color::Blue);
+        blueHumanBtn.setFillColor(sf::Color::Transparent);
+    }
+    if (inside(redHumanBtn)) {
+        redIsComputer = false;
+        redHumanBtn.setFillColor(sf::Color::Red);
+        redCpuBtn.setFillColor(sf::Color::Transparent);
+    }
+    if (inside(redCpuBtn)) {
+        redIsComputer = true;
+        redCpuBtn.setFillColor(sf::Color::Red);
+        redHumanBtn.setFillColor(sf::Color::Transparent);
+    }
+}
+
+
+
+
 void Game::handleEvents() {
     while (auto event = window.pollEvent()) {
 
-        // Close window
         if (event->is<sf::Event::Closed>()) {
             window.close();
         }
-        // Mouse clicks
-        else if (const auto* mousePressed = event->getIf<sf::Event::MouseButtonPressed>()) {
-            const int mx = mousePressed->position.x;
-            const int my = mousePressed->position.y;
+        else if (const auto* mouse = event->getIf<sf::Event::MouseButtonPressed>()) {
+            int mx = mouse->position.x;
+            int my = mouse->position.y;
 
-            // Focus input box
-            if (containsPoint(inputBox, static_cast<float>(mx), static_cast<float>(my)))
+            handlePlayerTypeClick(mx, my);
+
+            if (containsPoint(inputBox, (float)mx, (float)my)) {
                 isTyping = true;
-            else
+            }
+            else {
                 isTyping = false;
+            }
             inputBox.setOutlineColor(isTyping ? sf::Color::Blue : sf::Color::Black);
 
             // Mode toggle
@@ -219,117 +365,99 @@ void Game::handleEvents() {
                 mode = std::make_unique<GeneralMode>();
             }
 
-            // Blue S/O toggle
+            // Blue S/O
             if (mx > 30 && mx < 90 && my > 120 && my < 140) {
                 blueChoosesS = true;
-                blueSelect.setPosition({ 35.f, 125.f });
+                blueSelect.setPosition({ 35.f,125.f });
             }
             if (mx > 30 && mx < 90 && my > 150 && my < 170) {
                 blueChoosesS = false;
-                blueSelect.setPosition({ 35.f, 155.f });
+                blueSelect.setPosition({ 35.f,155.f });
             }
 
-            // Red S/O toggle
+            // Red S/O
             if (mx > 520 && mx < 580 && my > 120 && my < 140) {
                 redChoosesS = true;
-                redSelect.setPosition({ 525.f, 125.f });
+                redSelect.setPosition({ 525.f,125.f });
             }
             if (mx > 520 && mx < 580 && my > 150 && my < 170) {
                 redChoosesS = false;
-                redSelect.setPosition({ 525.f, 155.f });
+                redSelect.setPosition({ 525.f,155.f });
             }
 
             // Reset
-            if (containsPoint(resetBtn, static_cast<float>(mx), static_cast<float>(my))) {
+            if (containsPoint(resetBtn, (float)mx, (float)my)) {
                 resetBoard();
             }
 
+            // Human-only board input
+            if ((blueTurn && blueIsComputer) || (!blueTurn && redIsComputer))
+                return;
+
             // Board placement
-            const int col = (mx - BOARD_OFFSET_X) / CELL_SIZE;
-            const int row = (my - BOARD_OFFSET_Y) / CELL_SIZE;
+            int col = (mx - BOARD_OFFSET_X) / CELL_SIZE;
+            int row = (my - BOARD_OFFSET_Y) / CELL_SIZE;
 
-            if (!gameOver && board.inBounds(row, col)) {
-                if (board.get(row, col) == ' ') {
-                    const char toPlace = blueTurn ? (blueChoosesS ? 'S' : 'O')
-                        : (redChoosesS ? 'S' : 'O');
-                    board.set(row, col, toPlace);
+            if (!gameOver && board.inBounds(row, col) && board.get(row, col) == ' ') {
+                char letter = blueTurn ? (blueChoosesS ? 'S' : 'O')
+                    : (redChoosesS ? 'S' : 'O');
+                board.set(row, col, letter);
 
-                    // Delegate to current mode
-                    auto res = mode->onMove(board, row, col, blueTurn);
+                auto res = mode->onMove(board, row, col, blueTurn);
 
-                    // Points (General mode)
-                    if (res.points > 0) {
-                        if (blueTurn) blueScore += res.points;
-                        else          redScore += res.points;
-                        blueScoreLabel.setString("Score: " + std::to_string(blueScore));
-                        redScoreLabel.setString("Score: " + std::to_string(redScore));
+                if (res.points > 0) {
+                    if (blueTurn) blueScore += res.points;
+                    else          redScore += res.points;
+                    blueScoreLabel.setString("Score: " + std::to_string(blueScore));
+                    redScoreLabel.setString("Score: " + std::to_string(redScore));
+                }
+
+                if (res.gameOver) {
+                    gameOver = true;
+                    if (!res.message.empty()) statusLabel.setString(res.message);
+                    else {
+                        if (blueScore > redScore)      statusLabel.setString("Blue wins (General)!");
+                        else if (redScore > blueScore) statusLabel.setString("Red wins (General)!");
+                        else                           statusLabel.setString("It's a tie!");
                     }
-
-                    // End?
-                    if (res.gameOver) {
-                        gameOver = true;
-                        if (!res.message.empty()) {
-                            // Simple mode decided the message
-                            statusLabel.setString(res.message);
-                        }
-                        else {
-                            // General mode: compare scores
-                            if (blueScore > redScore) statusLabel.setString("Blue wins (General)!");
-                            else if (redScore > blueScore) statusLabel.setString("Red wins (General)!");
-                            else                            statusLabel.setString("It's a tie!");
-                        }
-                    }
-
-                    // Next turn: in General, only switch if you didn't score
-                    if (!gameOver) {
-                        if (res.points == 0) blueTurn = !blueTurn;
-                    }
+                }
+                else if (res.points == 0) {
+                    blueTurn = !blueTurn;
                 }
             }
         }
-        // Typing for board size input
         else if (const auto* textEvt = event->getIf<sf::Event::TextEntered>()) {
             if (isTyping) {
-                const uint32_t ch = textEvt->unicode;
-
+                uint32_t ch = textEvt->unicode;
                 if (ch >= '0' && ch <= '9') {
-                    if (boardSizeStr.size() < 2) boardSizeStr.push_back(static_cast<char>(ch));
+                    if (boardSizeStr.size() < 2) boardSizeStr.push_back((char)ch);
                 }
-                else if (ch == 8) { // backspace
-                    if (!boardSizeStr.empty()) boardSizeStr.pop_back();
+                else if (ch == 8 && !boardSizeStr.empty()) {
+                    boardSizeStr.pop_back();
                 }
-                else if (ch == 13 || ch == '\r' || ch == '\n') { // Enter
+                else if (ch == 13 || ch == '\r' || ch == '\n') {
                     int s = 0;
-                    if (!boardSizeStr.empty()) {
-                        try { s = std::stoi(boardSizeStr); }
-                        catch (...) { s = 0; }
-                    }
-                    if (s < 1) s = 1;
-                    if (s > 8) s = 8;
+                    try { s = std::stoi(boardSizeStr); }
+                    catch (...) {}
+                    s = std::max(1, std::min(8, s));
                     updateBoardSize(s);
                     isTyping = false;
                 }
-
-                
                 inputText.setString(boardSizeStr);
-                inputBox.setOutlineColor(isTyping ? sf::Color::Blue : sf::Color::Black);
             }
         }
     }
 }
 
-
 void Game::draw() {
     window.clear(sf::Color(240, 240, 240));
 
-    // Mode UI
     window.draw(title);
     window.draw(simpleLabel);
     window.draw(generalLabel);
     window.draw(simpleSelect);
     window.draw(generalSelect);
 
-    // Players UI
     window.draw(blueLabel);
     window.draw(redLabel);
     window.draw(blueS);
@@ -339,7 +467,6 @@ void Game::draw() {
     window.draw(blueSelect);
     window.draw(redSelect);
 
-    // Turn label
     if (blueTurn) {
         turnLabel.setString("Current turn: Blue");
         turnLabel.setFillColor(sf::Color::Blue);
@@ -350,20 +477,32 @@ void Game::draw() {
     }
     window.draw(turnLabel);
 
-    // Scores / status
     window.draw(blueScoreLabel);
     window.draw(redScoreLabel);
+
     if (gameOver) window.draw(statusLabel);
 
-    // Board
     board.draw(window);
 
-    // Controls
     window.draw(resetBtn);
     window.draw(resetLabel);
     window.draw(boardSizeLabel);
     window.draw(inputBox);
     window.draw(inputText);
 
+    // CPU/Human Buttons
+    window.draw(blueHumanBtn);
+    window.draw(blueCpuBtn);
+    window.draw(redHumanBtn);
+    window.draw(redCpuBtn);
+    window.draw(blueHumanLabel);
+    window.draw(blueCpuLabel);
+    window.draw(redHumanLabel);
+    window.draw(redCpuLabel);
+
+
     window.display();
 }
+
+
+
