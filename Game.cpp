@@ -1,16 +1,4 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
+﻿
 
 #include "Game.h"
 #include "GameMode.h"
@@ -21,6 +9,9 @@
 #include <iostream>
 #include <algorithm>
 #include <optional>
+#include "HumanPlayer.h"
+#include "ComputerOpponent.h"
+
 
 Game::~Game() = default;
 
@@ -64,6 +55,7 @@ Game::Game()
     , blueCpuLabel(font, "CPU", 14u)
     , redHumanLabel(font, "Human", 14u)
     , redCpuLabel(font, "CPU", 14u)
+    , replayLabel(font, "Replay Game", 16u)
 {
     window.setFramerateLimit(60);
     window.setKeyRepeatEnabled(true);
@@ -72,8 +64,11 @@ Game::Game()
         std::cerr << "Error loading font.\n";
         std::exit(1);
     }
+    bluePlayer = std::make_unique<HumanPlayer>('S');
+    redPlayer = std::make_unique<HumanPlayer>('S');
 
     mode = std::make_unique<SimpleMode>();
+    replayer = new GameReplayer(board, *mode);
 
     // Title
     title.setFillColor(sf::Color::Black);
@@ -167,6 +162,20 @@ Game::Game()
     resetLabel.setPosition({ resetBtn.getPosition().x + 10.f,
                              resetBtn.getPosition().y + 8.f });
 
+    replayBtn.setSize({ 120.f, 36.f });
+    replayBtn.setPosition({ 320.f, 570.f });  // below Reset
+    replayBtn.setFillColor(sf::Color(200, 200, 200));
+    replayBtn.setOutlineColor(sf::Color::Black);
+    replayBtn.setOutlineThickness(1.f);
+
+    replayLabel.setFont(font);
+    replayLabel.setString("Replay Game");
+    replayLabel.setCharacterSize(16);
+    replayLabel.setFillColor(sf::Color::Black);
+    replayLabel.setPosition({ replayBtn.getPosition().x + 10.f,
+                              replayBtn.getPosition().y + 8.f });
+
+
     blueHumanBtn.setRadius(7.f);
     blueHumanBtn.setFillColor(sf::Color::Blue);
     blueHumanBtn.setPosition({ 30.f, 210.f });
@@ -210,13 +219,32 @@ char Game::randomLetter() {
 
 
 
-void Game::run() {
-    while (window.isOpen()) {
+void Game::run()
+{
+    while (window.isOpen())
+    {
         handleEvents();
+
+ 
+        if (inReplayMode)
+        {
+            // Advance one replay step
+            if (!replayer->step())   
+            {
+                inReplayMode = false;
+                statusLabel.setString("Replay finished.");
+            }
+
+            draw();
+            continue;  
+        }
+
+       
         updateComputerMove();
         draw();
     }
 }
+
 
 bool Game::containsPoint(const sf::RectangleShape& r, float x, float y) {
     sf::FloatRect bounds(r.getPosition(), r.getSize());
@@ -224,7 +252,9 @@ bool Game::containsPoint(const sf::RectangleShape& r, float x, float y) {
 }
 
 void Game::resetBoard() {
+    
     board.reset();
+    recorder.clear();
     blueTurn = true;
     blueScore = 0;
     redScore = 0;
@@ -249,80 +279,130 @@ void Game::updateBoardSize(int newSize) {
 void Game::updateComputerMove() {
     if (gameOver) return;
 
-    bool cpuTurn =
-        (blueTurn && blueIsComputer) ||
-        (!blueTurn && redIsComputer);
+    Player* current = blueTurn ? bluePlayer.get() : redPlayer.get();
 
-    if (!cpuTurn) return;
+    // Not a CPU -> stop
+    if (!current->isComputer())
+        return;
 
+    // Delay first
     if (!waitingForCpuMove) {
         waitingForCpuMove = true;
         cpuClock.restart();
         return;
     }
 
+    // Wait 250ms
     if (cpuClock.getElapsedTime().asMilliseconds() < 250)
         return;
 
     waitingForCpuMove = false;
 
-    char letter = randomLetter();
+    // CPU takes the move
+    // Snapshot board before CPU move
+    Board oldBoard = board;
+
+    current->makeMove(board, *mode, blueTurn);
+    // Detect CPU move by comparing old board with new board
+    for (int r = 0; r < board.getSize(); r++) {
+        for (int c = 0; c < board.getSize(); c++) {
+            if (oldBoard.get(r, c) != board.get(r, c)) {
+
+                char letter = board.get(r, c);
+
+                // ⭐ Record CPU move
+                recorder.recordMove(r, c, letter, blueTurn);
+
+                goto moveRecorded;  // Exit both loops
+            }
+        }
+    }
+moveRecorded:;
 
 
-    auto move = cpu.chooseMove(board, letter);
-    int row = move.first;
-    int col = move.second;
+    // After CPU move, check board for result
+    MoveResult res = mode->lastResult;
 
-    if (!board.inBounds(row, col) || board.get(row, col) != ' ')
-        return;
-
-    board.set(row, col, letter);
-    auto res = mode->onMove(board, row, col, blueTurn);
-
+    // Score update
     if (res.points > 0) {
         if (blueTurn) blueScore += res.points;
         else          redScore += res.points;
+
         blueScoreLabel.setString("Score: " + std::to_string(blueScore));
         redScoreLabel.setString("Score: " + std::to_string(redScore));
     }
 
+    // Game Over?
     if (res.gameOver) {
         gameOver = true;
-        if (!res.message.empty()) statusLabel.setString(res.message);
-        else {
-            if (blueScore > redScore)      statusLabel.setString("Blue wins (General)!");
-            else if (redScore > blueScore) statusLabel.setString("Red wins (General)!");
-            else                           statusLabel.setString("It's a tie!");
+
+        // Show winner for General Mode
+        if (!res.message.empty()) {
+            statusLabel.setString(res.message);
         }
+        else {
+            if (blueScore > redScore)
+                statusLabel.setString("Blue wins (General)!");
+            else if (redScore > blueScore)
+                statusLabel.setString("Red wins (General)!");
+            else
+                statusLabel.setString("It's a tie!");
+        }
+
+        recorder.saveToFile("lastgame.txt");
         return;
     }
 
-    if (res.points == 0) blueTurn = !blueTurn;
+
+
+    // Switch turns only if no SOS scored
+    if (res.points == 0)
+        blueTurn = !blueTurn;
 }
+
 
 void Game::handlePlayerTypeClick(int mx, int my) {
     auto inside = [&](sf::CircleShape& c) {
-        sf::FloatRect r(c.getPosition(), sf::Vector2f{ 14.f, 14.f });
-        return r.contains(sf::Vector2f{ (float)mx, (float)my });
+        sf::FloatRect r(c.getPosition(), sf::Vector2f(14.f, 14.f));
+        return r.contains(sf::Vector2f((float)mx, (float)my));
         };
 
+    // --------------------------
+    // BLUE: HUMAN SELECTED
+    // --------------------------
     if (inside(blueHumanBtn)) {
-        blueIsComputer = false;
+        bluePlayer = std::make_unique<HumanPlayer>(blueChoosesS ? 'S' : 'O');
+
         blueHumanBtn.setFillColor(sf::Color::Blue);
         blueCpuBtn.setFillColor(sf::Color::Transparent);
     }
+
+    // --------------------------
+    // BLUE: CPU SELECTED
+    // --------------------------
     if (inside(blueCpuBtn)) {
-        blueIsComputer = true;
+        bluePlayer = std::make_unique<ComputerOpponent>(recorder);
+
         blueCpuBtn.setFillColor(sf::Color::Blue);
         blueHumanBtn.setFillColor(sf::Color::Transparent);
     }
+
+    // --------------------------
+    // RED: HUMAN SELECTED
+    // --------------------------
     if (inside(redHumanBtn)) {
-        redIsComputer = false;
+        redPlayer = std::make_unique<HumanPlayer>(redChoosesS ? 'S' : 'O');
+
         redHumanBtn.setFillColor(sf::Color::Red);
         redCpuBtn.setFillColor(sf::Color::Transparent);
     }
+
+    // --------------------------
+    // RED: CPU SELECTED
+    // --------------------------
     if (inside(redCpuBtn)) {
-        redIsComputer = true;
+        redPlayer = std::make_unique<ComputerOpponent>(recorder);
+
         redCpuBtn.setFillColor(sf::Color::Red);
         redHumanBtn.setFillColor(sf::Color::Transparent);
     }
@@ -331,16 +411,23 @@ void Game::handlePlayerTypeClick(int mx, int my) {
 
 
 
+
+
+
 void Game::handleEvents() {
     while (auto event = window.pollEvent()) {
 
-        if (event->is<sf::Event::Closed>()) {
-            window.close();
+        if (inReplayMode) {
+            if (event->is<sf::Event::Closed>()) {
+                window.close();
+                
+            }
         }
         else if (const auto* mouse = event->getIf<sf::Event::MouseButtonPressed>()) {
             int mx = mouse->position.x;
             int my = mouse->position.y;
 
+            // HUMAN/CPU toggle click
             handlePlayerTypeClick(mx, my);
 
             if (containsPoint(inputBox, (float)mx, (float)my)) {
@@ -351,7 +438,7 @@ void Game::handleEvents() {
             }
             inputBox.setOutlineColor(isTyping ? sf::Color::Blue : sf::Color::Black);
 
-            // Mode toggle
+           
             if (mx > 190 && mx < 230 && my > 40 && my < 60) {
                 isSimpleMode = true;
                 simpleSelect.setFillColor(sf::Color::Blue);
@@ -365,7 +452,7 @@ void Game::handleEvents() {
                 mode = std::make_unique<GeneralMode>();
             }
 
-            // Blue S/O
+         
             if (mx > 30 && mx < 90 && my > 120 && my < 140) {
                 blueChoosesS = true;
                 blueSelect.setPosition({ 35.f,125.f });
@@ -375,7 +462,7 @@ void Game::handleEvents() {
                 blueSelect.setPosition({ 35.f,155.f });
             }
 
-            // Red S/O
+         
             if (mx > 520 && mx < 580 && my > 120 && my < 140) {
                 redChoosesS = true;
                 redSelect.setPosition({ 525.f,125.f });
@@ -385,57 +472,103 @@ void Game::handleEvents() {
                 redSelect.setPosition({ 525.f,155.f });
             }
 
-            // Reset
+          
             if (containsPoint(resetBtn, (float)mx, (float)my)) {
                 resetBoard();
+                return;
             }
 
-            // Human-only board input
-            if ((blueTurn && blueIsComputer) || (!blueTurn && redIsComputer))
-                return;
+            
+            if (containsPoint(replayBtn, (float)mx, (float)my)) {
+                std::string filename = "lastgame.txt";
 
-            // Board placement
+                if (replayLoader.load(filename)) {
+                    auto& moves = replayLoader.getMoves();
+
+                    if (!moves.empty()) {
+                        inReplayMode = true;
+                        resetBoard();
+
+                        if (replayer) delete replayer;
+                        replayer = new GameReplayer(board, *mode);
+                        replayer->loadReplay(moves);
+
+                        statusLabel.setString("Replaying...");
+                        gameOver = false;
+                    }
+                    else {
+                        statusLabel.setString("Replay file is empty.");
+                    }
+                }
+                else {
+                    statusLabel.setString("Replay file not found.");
+                }
+                return;
+            }
+
+       
             int col = (mx - BOARD_OFFSET_X) / CELL_SIZE;
             int row = (my - BOARD_OFFSET_Y) / CELL_SIZE;
 
-            if (!gameOver && board.inBounds(row, col) && board.get(row, col) == ' ') {
-                char letter = blueTurn ? (blueChoosesS ? 'S' : 'O')
-                    : (redChoosesS ? 'S' : 'O');
-                board.set(row, col, letter);
+            if (!gameOver && board.inBounds(row, col)) {
 
-                auto res = mode->onMove(board, row, col, blueTurn);
+                bool cpuTurn =
+                    (blueTurn && bluePlayer->isComputer()) ||
+                    (!blueTurn && redPlayer->isComputer());
 
-                if (res.points > 0) {
-                    if (blueTurn) blueScore += res.points;
-                    else          redScore += res.points;
-                    blueScoreLabel.setString("Score: " + std::to_string(blueScore));
-                    redScoreLabel.setString("Score: " + std::to_string(redScore));
-                }
+                // BLOCK CPU from clicking the board
+                if (cpuTurn)
+                    return;
 
-                if (res.gameOver) {
-                    gameOver = true;
-                    if (!res.message.empty()) statusLabel.setString(res.message);
-                    else {
-                        if (blueScore > redScore)      statusLabel.setString("Blue wins (General)!");
-                        else if (redScore > blueScore) statusLabel.setString("Red wins (General)!");
-                        else                           statusLabel.setString("It's a tie!");
+                if (board.get(row, col) == ' ') {
+                    char letter = blueTurn ? (blueChoosesS ? 'S' : 'O')
+                        : (redChoosesS ? 'S' : 'O');
+
+                    board.set(row, col, letter);
+                    recorder.recordMove(row, col, letter, blueTurn);
+
+                    auto res = mode->onMove(board, row, col, blueTurn);
+
+                    if (res.points > 0) {
+                        if (blueTurn) blueScore += res.points;
+                        else          redScore += res.points;
+
+                        blueScoreLabel.setString("Score: " + std::to_string(blueScore));
+                        redScoreLabel.setString("Score: " + std::to_string(redScore));
                     }
-                }
-                else if (res.points == 0) {
-                    blueTurn = !blueTurn;
+
+                    if (res.gameOver) {
+                        gameOver = true;
+
+                        if (!res.message.empty()) statusLabel.setString(res.message);
+                        else {
+                            if (blueScore > redScore)      statusLabel.setString("Blue wins (General)!");
+                            else if (redScore > blueScore) statusLabel.setString("Red wins (General)!");
+                            else                           statusLabel.setString("It's a tie!");
+                        }
+
+                        recorder.saveToFile("lastgame.txt");
+                    }
+                    else if (res.points == 0) {
+                        blueTurn = !blueTurn;
+                    }
                 }
             }
         }
+
+       
         else if (const auto* textEvt = event->getIf<sf::Event::TextEntered>()) {
             if (isTyping) {
                 uint32_t ch = textEvt->unicode;
+
                 if (ch >= '0' && ch <= '9') {
-                    if (boardSizeStr.size() < 2) boardSizeStr.push_back((char)ch);
+                    if (boardSizeStr.size() < 2)
+                        boardSizeStr.push_back((char)ch);
                 }
-                else if (ch == 8 && !boardSizeStr.empty()) {
+                else if (ch == 8 && !boardSizeStr.empty()) { // backspace
                     boardSizeStr.pop_back();
                 }
-                else if (ch == 13 || ch == '\r' || ch == '\n') {
+                else if (ch == 13 || ch == '\r' || ch == '\n') { // enter
                     int s = 0;
                     try { s = std::stoi(boardSizeStr); }
                     catch (...) {}
@@ -443,11 +576,13 @@ void Game::handleEvents() {
                     updateBoardSize(s);
                     isTyping = false;
                 }
+
                 inputText.setString(boardSizeStr);
             }
         }
     }
 }
+
 
 void Game::draw() {
     window.clear(sf::Color(240, 240, 240));
@@ -499,10 +634,10 @@ void Game::draw() {
     window.draw(blueCpuLabel);
     window.draw(redHumanLabel);
     window.draw(redCpuLabel);
+    window.draw(replayBtn);
+    window.draw(replayLabel);
+
 
 
     window.display();
 }
-
-
-

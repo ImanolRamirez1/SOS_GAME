@@ -6,6 +6,16 @@
 #include <string>
 #include "Board.h"
 #include "ComputerPlayer.h"
+#include "Player.h"
+#include "GameRecorder.h"
+#include "GameReplayLoader.h"
+#include "GameReplayer.h"
+#include "ComputerOpponent.h"
+#include "HumanPlayer.h"
+
+
+
+
 
 #include <memory>      
 using namespace std;
@@ -25,10 +35,16 @@ public:
 
 private:
 
-    bool blueIsComputer = false;
-    bool redIsComputer = false;
+    std::unique_ptr<Player> bluePlayer;
+    std::unique_ptr<Player> redPlayer;
 
-    ComputerPlayer cpu;  // NEW
+
+    
+    GameRecorder recorder;
+    GameReplayLoader replayLoader;
+    GameReplayer* replayer = nullptr;
+
+    bool inReplayMode = false;
 
     
     sf::CircleShape blueHumanBtn, blueCpuBtn;
@@ -52,6 +68,8 @@ private:
     unique_ptr<GameMode> mode;
 
     // labels/text 
+    sf::RectangleShape replayBtn;
+    sf::Text replayLabel;
     sf::Text title, simpleLabel, generalLabel;
     sf::Text blueLabel, redLabel, turnLabel;
     sf::Text blueScoreLabel, redScoreLabel, statusLabel;
@@ -81,4 +99,5 @@ private:
 };
 
 #endif
+
 

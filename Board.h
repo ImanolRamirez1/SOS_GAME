@@ -13,6 +13,7 @@ class Board {
 public:
     // Creates an N×N board 
     Board(int size, int cellSize, int offsetX, int offsetY, const sf::Font& font);
+    int getSize() const { return n; }
 
     void draw(sf::RenderWindow& window);
     void reset();
@@ -41,3 +42,4 @@ private:
 };
 
 #endif
+

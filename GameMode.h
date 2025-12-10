@@ -5,6 +5,7 @@
 
 class Board;
 
+
 struct MoveResult {
     int points;           // points awarded this move 
     bool gameOver;        // whether the game just ended
@@ -16,6 +17,7 @@ public:
     virtual ~GameMode() = default;
     virtual MoveResult onMove(Board& b, int r, int c, bool isBlueTurn) = 0;
     virtual bool isOver(const Board& b) const = 0;
+    MoveResult lastResult;
 };
 
 #endif
